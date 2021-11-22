@@ -73,7 +73,7 @@ class SumoLogger {
             session: newConfig.sessionKey || getUUID(),
             onSuccess: newConfig.onSuccess || NOOP,
             onError: newConfig.onError || NOOP,
-            graphite: newConfig.graphite || false,
+            format: newConfig.format || false,
             raw: newConfig.raw || false
         };
     }
@@ -136,9 +136,13 @@ class SumoLogger {
             const headers = {
                 'X-Sumo-Client': 'sumo-javascript-sdk'
             };
-            if (this.config.graphite) {
+            if (this.config.format == 'graphite') {
                 Object.assign(headers, {
                     'Content-Type': 'application/vnd.sumologic.graphite'
+                });
+            } else if (this.config.format == 'carbon2') {
+                Object.assign(headers, {
+                    'Content-Type': 'application/vnd.sumologic.carbon2'
                 });
             } else {
                 Object.assign(headers, { 'Content-Type': 'application/json' });
@@ -237,12 +241,26 @@ class SumoLogger {
         }
 
         if (
-            this.config.graphite &&
+            this.config.format == 'graphite' &&
             (!Object.prototype.hasOwnProperty.call(testEl, 'path') ||
                 !Object.prototype.hasOwnProperty.call(testEl, 'value'))
         ) {
             console.error(
                 'Both "path" and "value" properties must be provided in the message object to send Graphite metrics'
+            );
+            return false;
+        }
+
+        if (
+            this.config.format == 'carbon2' &&
+            (
+                !Object.prototype.hasOwnProperty.call(testEl, 'intrinsic_tags') ||
+                !Object.prototype.hasOwnProperty.call(testEl, 'meta_tags') ||
+                !Object.prototype.hasOwnProperty.call(testEl, 'value')
+            )
+        ) {
+            console.error(
+                'All "intrinsic_tags", "meta_tags" and "value" properties must be provided in the message object to send Carbon2 metrics'
             );
             return false;
         }
@@ -289,8 +307,13 @@ class SumoLogger {
         const timestamp = formatDate(ts);
 
         const messages = message.map(item => {
-            if (this.config.graphite) {
+            if (this.config.format == 'graphite') {
                 return `${item.path} ${item.value} ${Math.round(
+                    ts.getTime() / 1000
+                )}`;
+            }
+            if (this.config.format == 'carbon2') {
+                return `${item.intrinsic_tags}  ${item.meta_tags} ${item.value} ${Math.round(
                     ts.getTime() / 1000
                 )}`;
             }
